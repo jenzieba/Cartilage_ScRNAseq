@@ -1,0 +1,373 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r load package}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(multtest)
+library(metap)
+library(ggplot2)
+library(cowplot)
+```
+
+```{r check no parallelization}
+future::plan("default",.init=FALSE)
+future::plan()
+```
+
+```{r set parameters}
+set.seed(444)
+cpu_core = 4 #number of cores for parallelized findallmarkers
+curr.wd <- "~/" #curr.wd <- "C:/jupyterlab/sc_mice_analysis/"
+tissue <- "cartilage" 
+merge <- TRUE #if we want to try merging (I don't think we need to do this)
+integration.technique = "SCTransform"  #"regular" for normal integration workflow
+
+
+if(!integration.technique %in% c("SCTransform","regular"))
+  {message("Invalid integration technique name")}
+```
+
+```{r sample names}
+if (tissue == "cartilage"){
+  folder.name <- "Cartilage_Count_Files"
+  #sample.names <- list.dirs(paste0(curr.wd,folder.name),full.names = FALSE, recursive = FALSE) 
+  sample.names <- c("AGA2","AgaCg26-3","AgaPCg2-1","AgaPCg2-4","AgaPCg2-6", 
+                    "mouse1","mouse2","mouse3","mouse4","mouse5")
+  #sample.names <- c("AgaPCg2-4","mouse5")
+}else if (tissue == "lung"){
+  folder.name <- "Count_Loupe_Sum_Files"
+  #sample.names <- list.dirs(paste0(curr.wd,folder.name),full.names = FALSE, recursive = FALSE) 
+  sample.names <- c("Aga_P28_101-1", "Aga_P28_69-3", "Aga_P28_70-1", "Aga_P28_810", 
+                    "Aga_P5_59-1", "Aga_P5_59-5", "Aga_P5_74-2", "Aga_P5_74-3", 
+                    "WT_P28_794", "WT_P28_808", "WT_P28_809", "WT_P28_831", 
+                    "WT_P5_24-2", "WT_P5_59-2", "WT_P5_59-3", "WT_P5_74-5")
+}else {
+  stop ("Invalid tissue name")
+}
+
+```
+
+
+```{r load sample function}
+load_data <- function(count.data, 
+                      project.name, 
+                      sample.label = project.name,
+                      sample.timepoint = NULL,
+                      nFeature_RNA.min = 1000, 
+                      nFeature_RNA.max = 5500, 
+                      nCount_RNA.max = 50000, 
+                      percent.mt.max = 5){
+  sample.obj <- Seurat::CreateSeuratObject(count = count.data, project = project.name, min.cells = 3, min.features = 200)
+  sample.obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(sample.obj, pattern = "^mt-")
+  sample.obj <- subset(sample.obj, subset = nFeature_RNA > nFeature_RNA.min & 
+                                                      nFeature_RNA < nFeature_RNA.max & 
+                                                      nCount_RNA < nCount_RNA.max & 
+                                                      percent.mt < percent.mt.max )
+  sample.obj$label <- sample.label
+  if(!is.null(sample.timepoint)){
+    sample.obj$timepoint <- sample.timepoint
+  }
+  return (sample.obj)
+}
+```
+
+
+```{r create list of seurat object}
+#create list of seurat objects
+sample.list <- list()
+for(ind in seq(1:length(sample.names))){
+  read.data <- Seurat::Read10X(data.dir=paste0(curr.wd, folder.name, "/", sample.names[[ind]], "/filtered_feature_bc_matrix/"))
+
+  #load cartilage
+  if(tissue == "cartilage"){
+    if(grepl("aga", tolower(sample.names[[ind]]), fixed = TRUE) == TRUE){
+      sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
+                                      sample.label = "Aga2", 
+                                      nFeature_RNA.max = 7000,
+                                      percent.mt.max = 5) ##aga cartilage
+    }else{
+      sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
+                                      sample.label = "WT", 
+                                      nFeature_RNA.max = 5500,
+                                      percent.mt.max = 10) ##wt cartilage
+    }
+  }
+  
+  #or load lung
+  else{
+    if(grepl("aga", tolower(sample.names[[ind]]), fixed = TRUE) == TRUE){
+      if(grepl("p5", tolower(sample.names[[ind]]), fixed = TRUE) == TRUE){
+        sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
+                                        sample.label = "Aga2", 
+                                        sample.timepoint = "p5", 
+                                        percent.mt.max = 5) ##aga p5 lung
+      }else{
+        sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
+                                        sample.label = "Aga2", 
+                                        sample.timepoint = "p28", 
+                                        percent.mt.max = 5) ##aga p28 lung
+      }
+    }else{
+      if(grepl("p5", tolower(sample.names[[ind]]), fixed = TRUE) == TRUE){
+        sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
+                                        sample.label = "WT", 
+                                        sample.timepoint = "p5", 
+                                        percent.mt.max = 10) ##aga p5 lung
+      }else{
+        sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
+                                        sample.label = "WT", 
+                                        sample.timepoint = "p28", 
+                                        percent.mt.max = 10) ##aga p28 lung
+      }
+    }
+  }
+}
+```
+
+
+```{r merge}
+if(merge == TRUE){
+    sample.merge <- merge(sample.list[[1]], y = sample.list[[-1]], add.cell.ids = sample.names, project = paste0("merged_",tissue))
+    
+    #visualize
+    VlnPlot(sample.merge, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "label")
+}
+```
+
+```{r integrate with sctransform}
+
+if(integration.technique == "SCTransform"){
+  #future::plan("multiprocess", workers = cpu_core)
+
+  sample.list <- lapply(X = sample.list, FUN = SCTransform, method = "glmGamPoi") #glmGamPoi improve learning speed
+  features <- SelectIntegrationFeatures(object.list = sample.list, nfeatures = 2000)
+  sample.list <- PrepSCTIntegration(object.list = sample.list, anchor.features = features)
+  sample.list <- lapply(X = sample.list, FUN = RunPCA, features = features)
+  
+  anchors <- FindIntegrationAnchors(object.list = sample.list, normalization.method = "SCT",
+      anchor.features = features, dims = 1:30, reduction = "rpca", k.anchor = 5)
+  combined.samples <- IntegrateData(anchorset = anchors, normalization.method = "SCT", dims = 1:30)
+  future::plan("default",.init=FALSE)
+  future::plan()
+
+}
+
+```
+
+```{r integrate with regular normalization}
+if (integration.technique == "regular"){
+  if(sctransform == TRUE){
+    warning("regular normalization will overwrite SCtransform ")
+  }
+  future::plan("multiprocess", workers = cpu_core)
+
+  sample.list <- lapply(X = sample.list, FUN = function(x) {
+    x <- NormalizeData(x, verbose = FALSE)
+    x <- FindVariableFeatures(x, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+    })
+  features <- SelectIntegrationFeatures(object.list = sample.list)
+  sample.list <- lapply(X = sample.list, FUN = function(x) {
+    x <- ScaleData(x, features = features, verbose = FALSE)
+    x <- RunPCA(x, features = features, verbose = FALSE)
+  })
+  anchors <- FindIntegrationAnchors(object.list = sample.list, reduction = "rpca", dims = 1:30)
+  sample.list <- IntegrateData(anchorset = anchors, dims = 1:30)
+  
+  future::plan("default",.init=FALSE)
+  future::plan()
+}
+```
+
+```{r downstream analysis and save object}
+combined.samples <- RunPCA(combined.samples, verbose = FALSE)
+combined.samples <- RunUMAP(combined.samples, reduction = "pca", dims = 1:30)
+
+combined.samples <- FindNeighbors(combined.samples, dims = 1:30, verbose = FALSE)
+combined.samples <- FindClusters(combined.samples, verbose = TRUE)
+
+saveRDS(combined.samples, file = paste0(curr.wd,tissue,"_combined_",integration.technique,".rds"))
+```
+
+```{r fig.height = 5, fig.width = 10, fig.align = "center"}
+# Visualization
+p1 <- DimPlot(lung_combined_SCTransform, reduction = "umap", group.by = "timepoint")
+p2 <- DimPlot(lung_combined_SCTransform, label = TRUE, repel = TRUE) + NoLegend()
+#p2 <- DimPlot(immune.combined.sct, reduction = "umap", group.by = "seurat_annotations", label = TRUE,
+    #repel = TRUE)
+p1 + p2
+
+DimPlot(lung_combined_SCTransform, reduction = "umap", split.by = "orig.ident")
+```
+
+
+```{r FindConservedMarkers}
+DefaultAssay(combined.samples) <- "RNA"
+conserved.markers.list <- list()
+for (cluster_ind in seq(1:length(unique(combined.samples@meta.data$seurat_clusters)))-1){
+  conserved.markers[[cluster_ind+1]] <- FindConservedMarkers(combined.samples, ident.1 = cluster_ind, grouping.var = "label", verbose = TRUE)
+}
+```
+
+```{r inspect result of findconservedmarkers}
+for (cluster_ind in seq(1:length(unique(combined.samples@meta.data$seurat_clusters)))-1){
+  print(paste("cluster",cluster_ind))
+  head(conserved.markers[[cluster_ind+1]])
+}
+```
+
+
+```{r FindAllMarkers}
+#set parallelization 
+future::plan("multiprocess", workers = cpu_core)
+
+DefaultAssay(combined.samples) <- "RNA"
+combined.markers <- FindAllMarkers(object = combined.samples, 
+                          only.pos = TRUE,
+                          logfc.threshold = 0.25)  
+
+future::plan("default",.init=FALSE)
+future::plan()
+View(combined.markers)                                               
+
+```
+
+```{r inspect and save result of findallmarkers}
+# Rearrange the columns to be more intuitive
+annot.comb.markers <- combined.markers[ , c(6, 7, 2:4, 1, 5)]
+
+# Order the rows by p-adjusted values
+annot.comb.markers <- annot.comb.markers %>%
+        dplyr::arrange(cluster, p_val_adj)
+#save
+write.csv(annot.comb.markers, 
+          file = paste0(curr.wd,tissue,"_combined_all_markers.csv"), 
+          quote = FALSE)
+
+# Extract top 3 markers per cluster
+top.comb.markers <- annot.comb.markers %>%
+        group_by(cluster) %>%
+        top_n(n = 3,
+              wt = avg_log2FC)
+
+# Visualize top 5 markers per cluster
+View(top.comb.markers)
+
+```
+
+```{r fig.height = 20, fig.width = 16, fig.align = "center"}
+# Extract top 1 markers per cluster
+top1.comb.markers <- annot.comb.markers %>%
+        group_by(cluster) %>%
+        top_n(n = 1,
+              wt = avg_log2FC)
+#View(top1.comb.markers)
+FeaturePlot(combined.samples, features = top1.comb.markers$gene, reduction = "umap", min.cutoff = "q9")
+
+```
+
+markers.to.plot <- c("Ctsk", "Prg4", "Sox9", "Acan", "Matn3", "Ihh", "Col10a1", "Mgp", "Nt5e",
+    "Sox4", "Mmp13", "Postn", "Col3a1", "Tnc", "Vcan", "Mmp2", "Ibsp", "Runx2", "Sp7",
+    "Col1a1", "Bglap", "Dkk3", "Thbs4", "Col2a1", "Tgfbi")
+    
+```{r fig.height = 20, fig.width = 16, fig.align = "center"}
+DefaultAssay(cartilage_combined_SCTransform) <- "RNA"
+markers.to.plot <- c("Ager", "Hopx", "Sftpc", "Nkx2-1", "Acta2", "Col1a1", "Notch3", "Trpc6", "Scgb1a1", "Pecam1", "Wnt2", "Mfap5", "Cnn1", "Ntrk3", "Fgf18", "Spc25", "Il17a", "Cd79a", "Ctss", "Foxj1", "Myh11", "Cdh5", "Gata2")
+FeaturePlot(cartilage_combined_SCTransform, markers.to.plot)
+DotPlot(cartilage_combined_SCTransform, features = markers.to.plot, cols = c("white", "black"), dot.scale = 12, split.by = "label")
+
+```
+
+```{r}
+theme_set(theme_cowplot())
+Idents(cartilage_combined_SCTransform) <- "orig.ident"
+avg.combined.samples <- as.data.frame(log1p(AverageExpression(cartilage_combined_SCTransform, verbose = FALSE)$RNA))
+avg.combined.samples$gene <- rownames(cartilage_combined_SCTransform)
+
+genes.to.label = c("Col1a1", "Col2a1", "Hspa5", "Ddit3", "Atf6", "Atf4", "Gadd45a")
+p1 <- ggplot(avg.combined.samples, aes(AGA2, mouse1)) + geom_point() + ggtitle("cartilage")
+p1 <- LabelPoints(plot = p1, points = genes.to.label, repel = TRUE)
+p1
+
+```
+
+```{r}
+new.cluster.ids <- c("Resting Chondrocytes", "Resting Chondrocytes", "Resting Chondrocytes", "Chondrocytes", "Proliferative GPCs", "Chondrocytes", "Chondrocytes", "Pre/hypertrophic GPC", "Articular Cartilage", "Resting Chondrocytes?", "Proliferative GPCs", "Periochondrial/Periosteal - Prrx1/Hes1 Expressing", "Periochondrial/Periosteal - Prrx1 Expressing", "Proliferative GPCs", "Resting Chondrocytes", "Pre/hypertrophic/terminal GPC", "Articular Cartilage", "Pre/hypertrophic GPC", "Osteoblast Progenitors", "Periosteal stem cells?", "Resting Chondrocytes", "Periochondrial/Periosteal - Prrx1 Expressing", "Pericytes/endothelial", "Progenitor cells")
+names(new.cluster.ids) <- levels(cartilage_combined_SCTransform)
+cartilage_combined_SCTransform <- RenameIdents(cartilage_combined_SCTransform, new.cluster.ids)
+DimPlot(cartilage_combined_SCTransform, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+```
+
+```{r}
+Idents(cartilage_combined_SCTransform) <- factor(Idents(cartilage_combined_SCTransform), levels = c("Resting Chondrocytes", "Chondrocytes", "Proliferative GPCs", "Pre/hypertrophic GPC", "Articular Cartilage", "Resting Chondrocytes?", "Periochondrial/Periosteal - Prrx1/Hes1 Expressing", "Periochondrial/Periosteal - Prrx1 Expressing", "Pre/hypertrophic/terminal GPC", "Osteoblast Progenitors", "Periosteal stem cells?", "Pericytes/endothelial", "Progenitor cells"))
+```
+
+```{r}
+theme_set(theme_cowplot())
+Idents(cartilage_combined_SCTransform) <- "label"
+avg.combined.samples <- as.data.frame(log1p(AverageExpression(cartilage_combined_SCTransform, verbose = FALSE)$RNA))
+avg.combined.samples$gene <- rownames(cartilage_combined_SCTransform)
+
+genes.to.label = c("Col1a1", "Col2a1", "Hspa5", "Ddit3", "Atf6", "Atf4", "Gadd45a")
+p1 <- ggplot(avg.combined.samples, aes(WT, Aga2)) + geom_point() + ggtitle("cartilage")
+p1 <- LabelPoints(plot = p1, points = genes.to.label, repel = TRUE)
+p1
+```
+
+
+```{r}
+theme_set(theme_cowplot())
+progenitor.cells <- subset(cartilage_combined_SCTransform, idents = "Progenitor cells")
+Idents(progenitor.cells) <- "label"
+avg.progenitor.cells <- as.data.frame(log1p(AverageExpression(progenitor.cells, verbose = FALSE)$RNA))
+avg.progenitor.cells$gene <- rownames(avg.progenitor.cells)
+p1 <- ggplot(avg.progenitor.cells, aes(WT, Aga2)) + geom_point() + ggtitle("Progenitor cells")
+p1
+```
+
+```{r}
+cartilage_combined_SCTransform$celltype.label <- paste(Idents(cartilage_combined_SCTransform), cartilage_combined_SCTransform$label, sep = "_")
+cartilage_combined_SCTransform$celltype <- Idents(cartilage_combined_SCTransform)
+Idents(cartilage_combined_SCTransform) <- "celltype.label"
+mut.control.progcells <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Progenitor cells_WT", ident.2 = "Progenitor cells_Aga2", verbose = FALSE)
+mut.control.pericytes <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Pericytes/endothelial_WT", ident.2 = "Pericytes/endothelial_Aga2", verbose = FALSE)
+mut.control.chondrocytes <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Chondrocytes_WT", ident.2 = "Chondrocytes_Aga2", verbose = FALSE)
+mut.control.restchondrocytes <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Resting Chondrocytes_WT", ident.2 = "Resting Chondrocytes_Aga2", verbose = FALSE)
+mut.control.prolifGPC <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Proliferative GPCs_WT", ident.2 = "Proliferative GPCs_Aga2", verbose = FALSE)
+mut.control.prehypGPC <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Pre/hypertrophic GPC_WT", ident.2 = "Pre/hypertrophic GPC_Aga2", verbose = FALSE)
+mut.control.artcart <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Articular Cartilage_WT", ident.2 = "Articular Cartilage_Aga2", verbose = FALSE)
+mut.control.perichPrx.hes1 <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_WT", ident.2 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_Aga2", verbose = FALSE)
+mut.control.perichPrx <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1 Expressing_WT", ident.2 = "Periochondrial/Periosteal - Prrx1 Expressing_Aga2", verbose = FALSE)
+mut.control.prehyptermGPC <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Pre/hypertrophic/terminal GPC_WT", ident.2 = "Pre/hypertrophic/terminal GPC_Aga2", verbose = FALSE)
+mut.control.OBprogs <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Osteoblast Progenitors_WT", ident.2 = "Osteoblast Progenitors_Aga2", verbose = FALSE)
+mut.control.periostSC <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periosteal stem cells?_WT", ident.2 = "Periosteal stem cells?_Aga2", verbose = FALSE)
+```
+
+```{r}
+write.csv(mut.control.restchondrocytes,"Cart.DE.restchondrocytes.csv", row.names = TRUE)
+```
+
+```{r}
+cartilage_combined_SCTransform$celltype.label <- paste(Idents(cartilage_combined_SCTransform), cartilage_combined_SCTransform$label, sep = "_")
+cartilage_combined_SCTransform$celltype <- Idents(cartilage_combined_SCTransform)
+Idents(cartilage_combined_SCTransform) <- "celltype.label"
+PrrxHes1.Prrx.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_WT", ident.2 = "Periochondrial/Periosteal - Prrx1 Expressing_WT", verbose = TRUE)
+PSC.Progcells.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periosteal stem cells?_WT", ident.2 = "Progenitor cells_WT", verbose = TRUE)
+PSC.Prrx.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periosteal stem cells?_WT", ident.2 = "Periochondrial/Periosteal - Prrx1 Expressing_WT", verbose = TRUE)
+Prrx.Progcells.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1 Expressing_WT", ident.2 = "Progenitor cells_WT", verbose = TRUE)
+PrrxHes1.PSC.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_WT", ident.2 = "Periosteal stem cells?_WT", verbose = TRUE)
+PrrxHes1.Progcells.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_WT", ident.2 = "Progenitor cells_WT", verbose = TRUE)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
