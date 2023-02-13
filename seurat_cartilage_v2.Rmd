@@ -42,15 +42,6 @@ if (tissue == "cartilage"){
   sample.names <- c("AGA2","AgaCg26-3","AgaPCg2-1","AgaPCg2-4","AgaPCg2-6", 
                     "mouse1","mouse2","mouse3","mouse4","mouse5")
   #sample.names <- c("AgaPCg2-4","mouse5")
-}else if (tissue == "lung"){
-  folder.name <- "Count_Loupe_Sum_Files"
-  #sample.names <- list.dirs(paste0(curr.wd,folder.name),full.names = FALSE, recursive = FALSE) 
-  sample.names <- c("Aga_P28_101-1", "Aga_P28_69-3", "Aga_P28_70-1", "Aga_P28_810", 
-                    "Aga_P5_59-1", "Aga_P5_59-5", "Aga_P5_74-2", "Aga_P5_74-3", 
-                    "WT_P28_794", "WT_P28_808", "WT_P28_809", "WT_P28_831", 
-                    "WT_P5_24-2", "WT_P5_59-2", "WT_P5_59-3", "WT_P5_74-5")
-}else {
-  stop ("Invalid tissue name")
 }
 
 ```
@@ -101,35 +92,6 @@ for(ind in seq(1:length(sample.names))){
     }
   }
   
-  #or load lung
-  else{
-    if(grepl("aga", tolower(sample.names[[ind]]), fixed = TRUE) == TRUE){
-      if(grepl("p5", tolower(sample.names[[ind]]), fixed = TRUE) == TRUE){
-        sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
-                                        sample.label = "Aga2", 
-                                        sample.timepoint = "p5", 
-                                        percent.mt.max = 5) ##aga p5 lung
-      }else{
-        sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
-                                        sample.label = "Aga2", 
-                                        sample.timepoint = "p28", 
-                                        percent.mt.max = 5) ##aga p28 lung
-      }
-    }else{
-      if(grepl("p5", tolower(sample.names[[ind]]), fixed = TRUE) == TRUE){
-        sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
-                                        sample.label = "WT", 
-                                        sample.timepoint = "p5", 
-                                        percent.mt.max = 10) ##aga p5 lung
-      }else{
-        sample.list[[ind]] <- load_data(read.data, sample.names[[ind]], 
-                                        sample.label = "WT", 
-                                        sample.timepoint = "p28", 
-                                        percent.mt.max = 10) ##aga p28 lung
-      }
-    }
-  }
-}
 ```
 
 
@@ -272,102 +234,3 @@ top1.comb.markers <- annot.comb.markers %>%
 FeaturePlot(combined.samples, features = top1.comb.markers$gene, reduction = "umap", min.cutoff = "q9")
 
 ```
-
-markers.to.plot <- c("Ctsk", "Prg4", "Sox9", "Acan", "Matn3", "Ihh", "Col10a1", "Mgp", "Nt5e",
-    "Sox4", "Mmp13", "Postn", "Col3a1", "Tnc", "Vcan", "Mmp2", "Ibsp", "Runx2", "Sp7",
-    "Col1a1", "Bglap", "Dkk3", "Thbs4", "Col2a1", "Tgfbi")
-    
-```{r fig.height = 20, fig.width = 16, fig.align = "center"}
-DefaultAssay(cartilage_combined_SCTransform) <- "RNA"
-markers.to.plot <- c("Ager", "Hopx", "Sftpc", "Nkx2-1", "Acta2", "Col1a1", "Notch3", "Trpc6", "Scgb1a1", "Pecam1", "Wnt2", "Mfap5", "Cnn1", "Ntrk3", "Fgf18", "Spc25", "Il17a", "Cd79a", "Ctss", "Foxj1", "Myh11", "Cdh5", "Gata2")
-FeaturePlot(cartilage_combined_SCTransform, markers.to.plot)
-DotPlot(cartilage_combined_SCTransform, features = markers.to.plot, cols = c("white", "black"), dot.scale = 12, split.by = "label")
-
-```
-
-```{r}
-theme_set(theme_cowplot())
-Idents(cartilage_combined_SCTransform) <- "orig.ident"
-avg.combined.samples <- as.data.frame(log1p(AverageExpression(cartilage_combined_SCTransform, verbose = FALSE)$RNA))
-avg.combined.samples$gene <- rownames(cartilage_combined_SCTransform)
-
-genes.to.label = c("Col1a1", "Col2a1", "Hspa5", "Ddit3", "Atf6", "Atf4", "Gadd45a")
-p1 <- ggplot(avg.combined.samples, aes(AGA2, mouse1)) + geom_point() + ggtitle("cartilage")
-p1 <- LabelPoints(plot = p1, points = genes.to.label, repel = TRUE)
-p1
-
-```
-
-```{r}
-new.cluster.ids <- c("Resting Chondrocytes", "Resting Chondrocytes", "Resting Chondrocytes", "Chondrocytes", "Proliferative GPCs", "Chondrocytes", "Chondrocytes", "Pre/hypertrophic GPC", "Articular Cartilage", "Resting Chondrocytes?", "Proliferative GPCs", "Periochondrial/Periosteal - Prrx1/Hes1 Expressing", "Periochondrial/Periosteal - Prrx1 Expressing", "Proliferative GPCs", "Resting Chondrocytes", "Pre/hypertrophic/terminal GPC", "Articular Cartilage", "Pre/hypertrophic GPC", "Osteoblast Progenitors", "Periosteal stem cells?", "Resting Chondrocytes", "Periochondrial/Periosteal - Prrx1 Expressing", "Pericytes/endothelial", "Progenitor cells")
-names(new.cluster.ids) <- levels(cartilage_combined_SCTransform)
-cartilage_combined_SCTransform <- RenameIdents(cartilage_combined_SCTransform, new.cluster.ids)
-DimPlot(cartilage_combined_SCTransform, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
-```
-
-```{r}
-Idents(cartilage_combined_SCTransform) <- factor(Idents(cartilage_combined_SCTransform), levels = c("Resting Chondrocytes", "Chondrocytes", "Proliferative GPCs", "Pre/hypertrophic GPC", "Articular Cartilage", "Resting Chondrocytes?", "Periochondrial/Periosteal - Prrx1/Hes1 Expressing", "Periochondrial/Periosteal - Prrx1 Expressing", "Pre/hypertrophic/terminal GPC", "Osteoblast Progenitors", "Periosteal stem cells?", "Pericytes/endothelial", "Progenitor cells"))
-```
-
-```{r}
-theme_set(theme_cowplot())
-Idents(cartilage_combined_SCTransform) <- "label"
-avg.combined.samples <- as.data.frame(log1p(AverageExpression(cartilage_combined_SCTransform, verbose = FALSE)$RNA))
-avg.combined.samples$gene <- rownames(cartilage_combined_SCTransform)
-
-genes.to.label = c("Col1a1", "Col2a1", "Hspa5", "Ddit3", "Atf6", "Atf4", "Gadd45a")
-p1 <- ggplot(avg.combined.samples, aes(WT, Aga2)) + geom_point() + ggtitle("cartilage")
-p1 <- LabelPoints(plot = p1, points = genes.to.label, repel = TRUE)
-p1
-```
-
-
-```{r}
-theme_set(theme_cowplot())
-progenitor.cells <- subset(cartilage_combined_SCTransform, idents = "Progenitor cells")
-Idents(progenitor.cells) <- "label"
-avg.progenitor.cells <- as.data.frame(log1p(AverageExpression(progenitor.cells, verbose = FALSE)$RNA))
-avg.progenitor.cells$gene <- rownames(avg.progenitor.cells)
-p1 <- ggplot(avg.progenitor.cells, aes(WT, Aga2)) + geom_point() + ggtitle("Progenitor cells")
-p1
-```
-
-```{r}
-cartilage_combined_SCTransform$celltype.label <- paste(Idents(cartilage_combined_SCTransform), cartilage_combined_SCTransform$label, sep = "_")
-cartilage_combined_SCTransform$celltype <- Idents(cartilage_combined_SCTransform)
-Idents(cartilage_combined_SCTransform) <- "celltype.label"
-mut.control.progcells <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Progenitor cells_WT", ident.2 = "Progenitor cells_Aga2", verbose = FALSE)
-mut.control.pericytes <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Pericytes/endothelial_WT", ident.2 = "Pericytes/endothelial_Aga2", verbose = FALSE)
-mut.control.chondrocytes <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Chondrocytes_WT", ident.2 = "Chondrocytes_Aga2", verbose = FALSE)
-mut.control.restchondrocytes <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Resting Chondrocytes_WT", ident.2 = "Resting Chondrocytes_Aga2", verbose = FALSE)
-mut.control.prolifGPC <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Proliferative GPCs_WT", ident.2 = "Proliferative GPCs_Aga2", verbose = FALSE)
-mut.control.prehypGPC <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Pre/hypertrophic GPC_WT", ident.2 = "Pre/hypertrophic GPC_Aga2", verbose = FALSE)
-mut.control.artcart <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Articular Cartilage_WT", ident.2 = "Articular Cartilage_Aga2", verbose = FALSE)
-mut.control.perichPrx.hes1 <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_WT", ident.2 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_Aga2", verbose = FALSE)
-mut.control.perichPrx <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1 Expressing_WT", ident.2 = "Periochondrial/Periosteal - Prrx1 Expressing_Aga2", verbose = FALSE)
-mut.control.prehyptermGPC <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Pre/hypertrophic/terminal GPC_WT", ident.2 = "Pre/hypertrophic/terminal GPC_Aga2", verbose = FALSE)
-mut.control.OBprogs <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Osteoblast Progenitors_WT", ident.2 = "Osteoblast Progenitors_Aga2", verbose = FALSE)
-mut.control.periostSC <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periosteal stem cells?_WT", ident.2 = "Periosteal stem cells?_Aga2", verbose = FALSE)
-```
-
-```{r}
-write.csv(mut.control.restchondrocytes,"Cart.DE.restchondrocytes.csv", row.names = TRUE)
-```
-
-```{r}
-cartilage_combined_SCTransform$celltype.label <- paste(Idents(cartilage_combined_SCTransform), cartilage_combined_SCTransform$label, sep = "_")
-cartilage_combined_SCTransform$celltype <- Idents(cartilage_combined_SCTransform)
-Idents(cartilage_combined_SCTransform) <- "celltype.label"
-PrrxHes1.Prrx.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_WT", ident.2 = "Periochondrial/Periosteal - Prrx1 Expressing_WT", verbose = TRUE)
-PSC.Progcells.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periosteal stem cells?_WT", ident.2 = "Progenitor cells_WT", verbose = TRUE)
-PSC.Prrx.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periosteal stem cells?_WT", ident.2 = "Periochondrial/Periosteal - Prrx1 Expressing_WT", verbose = TRUE)
-Prrx.Progcells.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1 Expressing_WT", ident.2 = "Progenitor cells_WT", verbose = TRUE)
-PrrxHes1.PSC.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_WT", ident.2 = "Periosteal stem cells?_WT", verbose = TRUE)
-PrrxHes1.Progcells.de <- FindMarkers(cartilage_combined_SCTransform, ident.1 = "Periochondrial/Periosteal - Prrx1/Hes1 Expressing_WT", ident.2 = "Progenitor cells_WT", verbose = TRUE)
-```
-
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
