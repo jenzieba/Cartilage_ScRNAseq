@@ -57,9 +57,9 @@ cartilage_newclust_prepSCT = SetIdent(cartilage_newclust_prepSCT, value = cartil
 ```
 
 ```{r}
-#ligand_target_matrix = readRDS(url("https://zenodo.org/record/3260758/files/ligand_target_matrix.rds"))
+ligand_target_matrix = readRDS(url("https://zenodo.org/record/3260758/files/ligand_target_matrix.rds"))
 ligand_target_matrix[1:5,1:5]
-#lr_network = readRDS(url("https://zenodo.org/record/3260758/files/lr_network.rds"))
+lr_network = readRDS(url("https://zenodo.org/record/3260758/files/lr_network.rds"))
 lr_network = lr_network %>% mutate(bonafide = ! database %in% c("ppi_prediction","ppi_prediction_go"))
 lr_network = lr_network %>% dplyr::rename(ligand = from, receptor = to) %>% distinct(ligand, receptor, bonafide)
 head(lr_network)
@@ -258,7 +258,7 @@ ligand_prioritized_tbl_oi = prioritization_tables$prioritization_tbl_ligand_rece
 ```
 
 ```{r}
-receiver_oi = "Hypertrophic/terminal GPC_WT" 
+receiver_oi = "Hypertrophic/terminal GPC_Aga2" 
 
 filtered_ligands = ligand_prioritized_tbl_oi %>% filter(receiver == receiver_oi) %>% pull(ligand) %>% unique()
 
@@ -284,20 +284,5 @@ colors_sender = brewer.pal(n = prioritized_tbl_oi_preh$sender %>% unique() %>% s
 colors_receiver = c("lavender")  %>% magrittr::set_names(prioritized_tbl_oi_preh$receiver %>% unique() %>% sort())
 
 circos_output = make_circos_lr(prioritized_tbl_oi_preh, colors_sender, colors_receiver)
-
-
-l2 <- rbind(prioritized_tbl_oi_preh)
-save(l2, file = "diff_agadown_niche.Rda")
-
-colors_sender = brewer.pal(n = l2$sender %>% unique() %>% sort() %>% length(), name = 'Spectral') %>% magrittr::set_names(l2$sender %>% unique() %>% sort())
-colors_receiver = c("lavender", "grey", "pink")  %>% magrittr::set_names(l2$receiver %>% unique() %>% sort())
-
-circos_output = make_circos_lr(l2, colors_sender, colors_receiver, scale = T, border = F, transparency = 0.2)
-```
-
-```{r}
-pdf("diff_agadown_plot.pdf") 
-
-circos_output = make_circos_lr(l2, colors_sender, colors_receiver, scale = T, border = F, transparency = 0.2)
 ```
 
