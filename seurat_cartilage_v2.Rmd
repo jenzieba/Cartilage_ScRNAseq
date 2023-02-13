@@ -3,10 +3,6 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
-
 ```{r load package}
 library(dplyr)
 library(Seurat)
@@ -25,9 +21,9 @@ future::plan()
 ```{r set parameters}
 set.seed(444)
 cpu_core = 4 #number of cores for parallelized findallmarkers
-curr.wd <- "~/" #curr.wd <- "C:/jupyterlab/sc_mice_analysis/"
+curr.wd <- "~/" #curr.wd
 tissue <- "cartilage" 
-merge <- TRUE #if we want to try merging (I don't think we need to do this)
+merge <- TRUE #if we want to do merging
 integration.technique = "SCTransform"  #"regular" for normal integration workflow
 
 
