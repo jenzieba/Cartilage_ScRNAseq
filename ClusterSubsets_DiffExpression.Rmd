@@ -11,6 +11,7 @@ library(Seurat)
 
 
 ```{r}
+#add celltype_label column
 cartilage_newclust_prepSCT$celltype.label <- paste(Idents(cartilage_newclust_prepSCT), cartilage_newclust_prepSCT$label, sep = "_")
 cartilage_newclust_prepSCT$celltype <- Idents(cartilage_newclust_prepSCT)
 ```
