@@ -1,0 +1,71 @@
+---
+title: "ClusterSubsets_DiffExpression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+```{r}
+library(Seurat)
+```
+
+
+```{r}
+cartilage_newclust_prepSCT$celltype.label <- paste(Idents(cartilage_newclust_prepSCT), cartilage_newclust_prepSCT$label, sep = "_")
+cartilage_newclust_prepSCT$celltype <- Idents(cartilage_newclust_prepSCT)
+```
+
+
+```{r}
+DefaultAssay(cartilage_newclust_prepSCT) <- "RNA"
+Idents(cartilage_newclust_prepSCT) <- "celltype_label"
+PerichondrialDiff_DE <- FindMarkers(cartilage_newclust_prepSCT, ident.1 = "Perichondrial Diff._WT", ident.2 = "Perichondrial Diff._Aga2", verbose = FALSE, slot = "scale.data")
+head(PerichondrialDiff_DE, n = 15)
+write.csv(PerichondrialDiff_DE, "PerichondrialDiff_DE.csv", row.names = TRUE)
+```
+
+```{r}
+#Findmarkers for every cluster so far identified as a "Resting Chondrocyte"
+DefaultAssay(cartilage_newclust_prepSCT) <- "RNA"
+cartilage_newclust_prepSCT <- SetIdent(cartilage_newclust_prepSCT, value = "integrated_snn_res.1.4")
+cartilage_newclust_prepSCT <- NormalizeData(cartilage_newclust_prepSCT,scale.factor = 10000000,normalization.method = "LogNormalize")
+cluster31.markers <- FindMarkers(cartilage_newclust_prepSCT, ident.1 = 31, ident.2 = c(29, 10, 9, 13, 15, 17, 18, 19, 20, 21, 26, 28, 1, 2, 5, 10), min.pct = 0.25)
+cluster31.markers.vars<-row.names(cluster31.markers)
+cluster31.markers[["Gene"]]<-cluster31.markers.vars
+write_csv(cluster31.markers,"./cluster31.markers.csv")
+```
+
+```{r}
+#Findmarkers for every cluster so far identified as a "Perichondrial"
+DefaultAssay(cartilage_newclust_prepSCT) <- "RNA"
+cartilage_newclust_prepSCT <- SetIdent(cartilage_newclust_prepSCT, value = "integrated_snn_res.1.4")
+cartilage_newclust_prepSCT <- NormalizeData(cartilage_newclust_prepSCT,scale.factor = 10000000,normalization.method = "LogNormalize")
+cluster32.markers <- FindMarkers(cartilage_newclust_prepSCT, ident.1 = 32, ident.2 = c(8, 12, 14, 24), min.pct = 0.25)
+cluster32.markers.vars<-row.names(cluster32.markers)
+cluster32.markers[["Gene"]]<-cluster32.markers.vars
+write_csv(cluster32.markers,"./cluster32.markers.csv")
+```
+
+```{r}
+#Findmarkers for every cluster so far identified as differentiating
+DefaultAssay(cartilage_newclust_prepSCT) <- "RNA"
+cartilage_newclust_prepSCT <- SetIdent(cartilage_newclust_prepSCT, value = "integrated_snn_res.1.4")
+cartilage_newclust_prepSCT <- NormalizeData(cartilage_newclust_prepSCT,scale.factor = 10000000,normalization.method = "LogNormalize")
+cluster30.markers <- FindMarkers(cartilage_newclust_prepSCT, ident.1 = 30, ident.2 = c(2, 3, 6, 11, 15, 16, 19, 23, 25), min.pct = 0.25)
+cluster30.markers.vars<-row.names(cluster30.markers)
+cluster30.markers[["Gene"]]<-cluster30.markers.vars
+write_csv(cluster30.markers,"./cluster30.markers.csv")
+```
+
+
+
+
